@@ -1,5 +1,2 @@
-import React from "react";
-
-export default function () {
-  return <div>hello</div>;
-}
+export { useDndContext } from './Store';
+export { default as GlobalDnd } from './Wrapper';

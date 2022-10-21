@@ -1,14 +1,31 @@
 {
-  "name": "react-nowrapper-dnd",
-  "version": "1.0.0",
+  "name": "react-global-dnd",
+  "version": "1.0.0-beta3",
   "description": "",
-  "main": "index.js",
+  "main": "lib/index.js",
+  "module": "esm/index.js",
+  "typings": "types/index.d.ts",
   "scripts": {
-    "start": "bfe run dev --entry src/index.tsx",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "bfe rollup -d",
+    "clean": "rm -rf dist esm lib types",
+    "build": "npm run clean && bfe rollup",
+    "prepublishOnly": "npm run build",
+    "prepare": "husky install"
   },
-  "author": "",
+  "repository": "wz-pro/react-global-dnd",
+  "author": "wz-pro",
+  "homepage": "https://github.com/wz-pro/react-global-dnd",
+  "bugs": "https://github.com/wz-pro/react-global-dnd/issues",
   "license": "ISC",
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx}": [
+      "prettier --write",
+      "eslint --fix"
+    ],
+    "*.{css,less,json,html,md,markdown}": [
+      "prettier --write"
+    ]
+  },
   "peerDependencies": {
     "react": ">=16.0.0",
     "react-dom": ">=16.0.0"
@@ -16,6 +33,6 @@
   "devDependencies": {
     "@types/react": "^18.0.21",
     "@types/react-dom": "^18.0.6",
-    "bfe-cli": "^1.1.0-beta1"
+    "bfe-cli": "^1.1.1-beta2"
   }
 }

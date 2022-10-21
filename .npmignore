@@ -1,0 +1,10 @@
+node_modules
+.gitignore
+.eslint*
+.prettierrc
+.idea
+.husky
+package-lock.json
+
+example
+tsconfig.json
