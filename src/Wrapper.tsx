@@ -11,7 +11,7 @@ export interface DndProps<T> extends IDndLayoutProps<T> {
   showInteractLayer?: boolean;
 }
 
-export default function <T>({
+export default function <T extends { [key: string]: any }>({
   children,
   showInteractLayer = true,
   ...others
@@ -19,7 +19,7 @@ export default function <T>({
   return (
     <Provider>
       <div className="dnd-root-container">
-        <DndLayout<any> {...others}>{children}</DndLayout>
+        <DndLayout<T> {...others}>{children}</DndLayout>
         {showInteractLayer ? <InteractLayer /> : null}
       </div>
     </Provider>

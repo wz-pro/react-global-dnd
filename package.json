@@ -9,8 +9,7 @@
     "start": "bfe rollup -d",
     "clean": "rm -rf dist esm lib types",
     "build": "npm run clean && bfe rollup",
-    "prepublishOnly": "npm run build",
-    "prepare": "husky install"
+    "prepublishOnly": "npm run build"
   },
   "repository": "wz-pro/react-global-dnd",
   "author": "wz-pro",
@@ -33,6 +32,6 @@
   "devDependencies": {
     "@types/react": "^18.0.21",
     "@types/react-dom": "^18.0.6",
-    "bfe-cli": "^1.1.1-beta2"
+    "bfe-cli": "^1.1.1-beta3"
   }
 }

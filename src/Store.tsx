@@ -13,17 +13,17 @@ import React, {
 
 import { IDndInfo } from './DndLayout';
 
-interface DndContextValue {
+interface DndContextValue<D> {
   isDragging: boolean;
   setIsDragging: Dispatch<SetStateAction<boolean>>;
-  currentDragRef: MutableRefObject<IDndInfo<any> | null>;
+  currentDragRef: MutableRefObject<IDndInfo<D> | null>;
   movingEventRef: MutableRefObject<SyntheticEvent | null>;
   registerMovingListener: (listener: Listener) => void;
   unRegisterMovingListener: (listener: Listener) => void;
   onMouseMoving: (e: SyntheticEvent<any, MouseEvent>) => void;
 }
 
-const DndContext = createContext<DndContextValue>({} as any);
+const DndContext = createContext<DndContextValue<any>>({} as any);
 
 interface ProviderProps {
   children: ReactNode;
@@ -51,7 +51,7 @@ function Provider<T>({ children }: ProviderProps) {
     movingListenersRef.current.forEach((listener) => listener(e));
   }, []);
 
-  const providerValue: DndContextValue = {
+  const providerValue: DndContextValue<T> = {
     currentDragRef,
     isDragging,
     setIsDragging,
@@ -66,8 +66,8 @@ function Provider<T>({ children }: ProviderProps) {
   );
 }
 
-function useDndContext() {
-  return useContext(DndContext);
+function useDndContext<T>(): DndContextValue<T> {
+  return useContext<DndContextValue<T>>(DndContext);
 }
 
 export { Provider, useDndContext };

@@ -1,6 +1,7 @@
 import {
   CSSProperties,
   ReactNode,
+  RefObject,
   SyntheticEvent,
   useCallback,
   useEffect,
@@ -16,31 +17,60 @@ import './index.less';
 export const DND_LAYOUT_ROOT_ID = 'MAIN_DND_LAYOUT_ID';
 
 export const dndIdName = 'data-dnd-id';
-export const dndDataName = 'data-dnd-data';
+export const dndDataName = 'data-dnd-props';
 
 let mouseDownTime = 0;
 
+export interface IDndProps<T> {
+  data: T;
+  canDrop: ((dragInfo: IDndInfo<T>) => boolean) | boolean;
+  canDrag: boolean;
+}
+export interface MousePosition {
+  clientX: number;
+  clientY: number;
+  offsetX: number;
+  offsetY: number;
+  x: number;
+  y: number;
+}
+
+export interface ElementPosition {
+  clientTop: number;
+  clientLeft: number;
+  x: number;
+  y: number;
+}
+
 export type IDndInfo<T> = {
   dndId: number | string;
-  dndData: T;
+  dndProps: IDndProps<T>;
   info?: any;
   element: HTMLElement;
-  mousePosition: { x: number; y: number };
+  mousePosition: MousePosition;
+  elementPosition: ElementPosition;
 } | null;
 
 export interface IDndLayoutProps<T> {
   children: ReactNode;
   onDragEnd?: (from: IDndInfo<T>, to: IDndInfo<T>) => void;
-  onDragging?: (e: any, data: T | undefined, element?: HTMLElement) => void;
+  onDragging?: (
+    e: SyntheticEvent<any, MouseEvent>,
+    data: T | undefined,
+    element?: HTMLElement
+  ) => void;
   onHover?: (
     isDragging: boolean,
     hoverData: T,
     hoverElement: HTMLElement,
     currentDragInfo: IDndInfo<T>,
-    e: any
+    e: SyntheticEvent<any, MouseEvent>
   ) => void;
   onComponentClicked?: (dndData: T, dndId: number | string) => void;
-  onMouseRightClick?: (dndInfo: IDndInfo<T>, e: any) => void;
+  onMouseRightClick?: (
+    dndInfo: IDndInfo<T>,
+    e: SyntheticEvent<any, MouseEvent>
+  ) => void;
   onMouseLeave?: () => void;
   style?: CSSProperties;
 }
@@ -62,29 +92,92 @@ const getFiberNodeFromEvent = (e: any) => {
 };
 
 const getRealNode = (node: any): any => {
-  if (!node || node.memoizedProps.id === DND_LAYOUT_ROOT_ID) return null;
+  if (!node) return null;
+  if (node.memoizedProps.id === DND_LAYOUT_ROOT_ID) {
+    return node;
+  }
   const hasId = Object.hasOwn(node.memoizedProps, dndIdName);
   return hasId ? node : getRealNode(node?.return);
 };
 
-const getMousePositionFromEvent = (e: MouseEvent) => {
+const pxStrToNum = (pStr: string) => {
+  const nStr = pStr.replace(/px$/, '');
+  return Number(nStr);
+};
+
+const getPositionInfo = (
+  e: MouseEvent,
+  element: HTMLElement,
+  rootRef?: RefObject<HTMLDivElement>
+) => {
+  let {
+    clientLeft: rootLeft = 0,
+    clientTop: rootTop = 0,
+    scrollTop: rootScrollTop = 0,
+    scrollLeft: rootScrollLeft = 0,
+  } = rootRef?.current || {};
+  if (!rootRef) {
+    const rootEle = document.getElementById(DND_LAYOUT_ROOT_ID);
+    const rec = rootEle?.getBoundingClientRect();
+    rootLeft = rec?.left || 0;
+    rootTop = rec?.top || 0;
+    rootScrollTop = rootEle?.scrollTop || 0;
+    rootScrollLeft = rootEle?.scrollLeft || 0;
+  }
+  const { offsetX = 0, offsetY = 0, clientX, clientY } = e;
+  const target: HTMLElement = e.target as HTMLElement;
+  const { left = 0, top = 0 } = target?.getBoundingClientRect() || {};
+  const targetStyle = getComputedStyle(target);
+  const elementStyle = getComputedStyle(element);
+  const topOffset =
+    pxStrToNum(targetStyle.paddingTop) +
+    pxStrToNum(targetStyle.borderTopWidth) -
+    pxStrToNum(elementStyle.paddingTop) -
+    pxStrToNum(elementStyle.borderTopWidth);
+  const leftOffset =
+    pxStrToNum(targetStyle.paddingLeft) +
+    pxStrToNum(targetStyle.borderLeftWidth) -
+    pxStrToNum(elementStyle.paddingLeft) -
+    pxStrToNum(elementStyle.borderLeftWidth);
+  const { left: comLeft = 0, top: comTop = 0 } =
+    element?.getBoundingClientRect() || {};
   return {
-    x: e.offsetX || 0,
-    y: e.offsetY || 0,
+    mousePosition: {
+      clientX,
+      clientY,
+      offsetX: offsetX + left - comLeft + topOffset,
+      offsetY: offsetY + top - comTop + leftOffset,
+      x: clientX - left + rootScrollLeft,
+      y: clientY - top + rootScrollTop,
+    },
+    elementPosition: {
+      clientLeft: comLeft,
+      clientTop: comTop,
+      x: comLeft - rootLeft + rootScrollLeft,
+      y: comTop - rootTop + rootScrollTop,
+    },
   };
 };
 
-export const getInfoFromFiberNode = (e: any) => {
+export function getInfoFromFiberNode<T>(
+  e: SyntheticEvent<any, MouseEvent>
+): IDndInfo<T> {
   const fiberNode = getFiberNodeFromEvent(e);
   const info = getRealNode(fiberNode) || { memoizedProps: {} };
+  const element = getContainerElement(info);
+  const { mousePosition, elementPosition } = getPositionInfo(
+    e.nativeEvent,
+    element
+  );
   return {
     dndId: info.memoizedProps[dndIdName],
-    dndData: info.memoizedProps[dndDataName],
+    dndProps: info.memoizedProps[dndDataName],
     info,
-    element: getContainerElement(info),
-    mousePosition: getMousePositionFromEvent(e.nativeEvent),
+    element,
+    mousePosition,
+    elementPosition,
   };
-};
+}
 
 export default function DndLayout<T extends { [key: string]: any }>({
   children,
@@ -97,9 +190,10 @@ export default function DndLayout<T extends { [key: string]: any }>({
   style,
 }: IDndLayoutProps<T>) {
   const { currentDragRef, isDragging, setIsDragging, onMouseMoving } =
-    useDndContext();
+    useDndContext<T>();
   const elementPreOpacityRef = useRef<number>(1);
   const [mouseDown, setMouseDown] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const { element } = currentDragRef.current || {};
@@ -119,10 +213,10 @@ export default function DndLayout<T extends { [key: string]: any }>({
   }, [isDragging]);
 
   const onEnd = useCallback(
-    (e: any) => {
+    (e: SyntheticEvent<any, MouseEvent>) => {
       const from = currentDragRef.current;
-      const to = getInfoFromFiberNode(e);
-      if (!to.dndId) return null;
+      const to = getInfoFromFiberNode<T>(e);
+      if (!to?.dndId) return null;
       onDragEnd && onDragEnd(from, to);
     },
     [onDragEnd]
@@ -131,9 +225,9 @@ export default function DndLayout<T extends { [key: string]: any }>({
   const onClick = useCallback(
     (e: SyntheticEvent<any, MouseEvent>) => {
       setIsDragging(false);
-      const { dndData, dndId } = getInfoFromFiberNode(e);
-      if (!dndData || !dndId) return;
-      onComponentClicked && onComponentClicked(dndData, dndId);
+      const data = getInfoFromFiberNode<T>(e);
+      if (!data?.dndProps || !data?.dndId) return;
+      onComponentClicked && onComponentClicked(data.dndProps.data, data.dndId);
     },
     [onComponentClicked]
   );
@@ -153,21 +247,27 @@ export default function DndLayout<T extends { [key: string]: any }>({
     if (e.nativeEvent.button !== 0) return;
     setMouseDown(true);
     mouseDownTime = new Date().getTime();
-    const dragInfo = getInfoFromFiberNode(e);
-    const dragElement = getContainerElement(dragInfo.info);
+    const dragInfo = getInfoFromFiberNode<T>(e);
+    const dragElement = getContainerElement(dragInfo?.info);
     currentDragRef.current = {
       ...dragInfo,
       element: dragElement,
-    };
+    } as any;
   }, []);
 
   const onOver = useCallback(
-    (e: SyntheticEvent) => {
-      const { dndData, info } = getInfoFromFiberNode(e);
-      if (!dndData || !info || !onHover) return;
-      const element = getContainerElement(info);
+    (e: SyntheticEvent<any, MouseEvent>) => {
+      const data = getInfoFromFiberNode<T>(e);
+      if (!data?.dndProps || !data.info || !onHover) return;
+      const element = getContainerElement(data.info);
       element &&
-        onHover(isDragging, dndData, element, currentDragRef.current, e);
+        onHover(
+          isDragging,
+          data.dndProps?.data,
+          element,
+          currentDragRef.current,
+          e
+        );
     },
     [onHover, isDragging]
   );
@@ -175,10 +275,10 @@ export default function DndLayout<T extends { [key: string]: any }>({
   const onMove = useCallback(
     (e: SyntheticEvent<any, MouseEvent>) => {
       onMouseMoving(e);
-      const { dndData, element, dndId } = currentDragRef.current || {};
-      if (mouseDown && dndId !== undefined) {
+      const { dndProps, element, dndId } = currentDragRef.current || {};
+      if (mouseDown && dndId !== undefined && dndProps?.canDrag !== false) {
         setIsDragging(true);
-        onDragging && onDragging(e, dndData, element);
+        onDragging && onDragging(e, dndProps?.data, element);
       }
     },
     [mouseDown, onDragging]
@@ -188,7 +288,7 @@ export default function DndLayout<T extends { [key: string]: any }>({
     (e: SyntheticEvent<any, MouseEvent>) => {
       e.preventDefault();
       e.stopPropagation();
-      const dndInfo = getInfoFromFiberNode(e);
+      const dndInfo = getInfoFromFiberNode<T>(e);
       onMouseRightClick && onMouseRightClick(dndInfo, e);
     },
     [onMouseRightClick]
@@ -207,6 +307,7 @@ export default function DndLayout<T extends { [key: string]: any }>({
   return (
     <div
       id={DND_LAYOUT_ROOT_ID}
+      ref={rootRef}
       style={memoStyle}
       className="dnd-layout-container"
       onMouseDown={onDown}
